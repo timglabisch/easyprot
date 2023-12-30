@@ -3,14 +3,14 @@ use nom::{complete, IResult, Parser};
 use nom::character::complete::space0;
 
 
-pub fn parse(s: &str) -> IResult<&str, Vec<Message>> {
+pub fn parse(s: &str) -> IResult<&str, Vec<Box<Message>>> {
     ::nom::multi::many1(parse_message).parse(s)
 }
 
 struct Message {}
 
 
-pub fn parse_message(s: &str) -> IResult<&str, Message> {
+pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag("Message").parse(s)?;
     let (s, _) = space0.parse(s)?;
@@ -19,7 +19,7 @@ pub fn parse_message(s: &str) -> IResult<&str, Message> {
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = space0.parse(s)?;
 
-    Ok((s, Message {}))
+    Ok((s, Box::new(Message {})))
 }
 
 
