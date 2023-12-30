@@ -18,15 +18,38 @@ pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag("{").parse(s)?;
     let (s, _) = space0.parse(s)?;
+    let (s, _) = parse_field.parse(s)?;
+    let (s, _) = space0.parse(s)?;
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = space0.parse(s)?;
 
     Ok((s, Box::new(Message {})))
 }
 
+enum EnumLine {
+    EnumLineField(EnumLineField),
+    EnumLineComment(EnumLineComment),
+}
+
+struct EnumLineField {}
+struct EnumLineComment {}
+
+pub fn parse_line(s: &str) -> IResult<&str, EnumLine> {
+    let (s, _) = space0.parse(s)?;
+    let (s, v1) = alt((parse_field, tag("repeated"))).parse(s)?;
+    let (s, _) = space0.parse(s)?;
+    Ok((s, EnumLine {}))
+}
+
 struct MessageField;
 
-pub fn parse_field(s: &str) -> IResult<&str, MessageField> {
+pub fn parse_comment(s: &str) -> IResult<&str, EnumLine> {
+    Ok((s, EnumLine::EnumLineComment(EnumLineComment {
+        
+    })))
+}
+
+pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
 
     let (s, _) = space0.parse(s)?;
     let (s, v1) = alt((tag("optional"), tag("repeated"))).parse(s)?;
@@ -49,7 +72,7 @@ pub fn parse_field(s: &str) -> IResult<&str, MessageField> {
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag(";").parse(s)?;
 
-    Ok((s, MessageField {}))
+    Ok((s, EnumLine::EnumLineField(EnumLineField {})))
 }
 
 
