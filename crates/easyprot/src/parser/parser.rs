@@ -1,6 +1,8 @@
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_while1};
 use nom::{complete, IResult, Parser};
-use nom::character::complete::space0;
+use nom::branch::alt;
+use nom::character::complete::{space0, space1};
+use nom::character::{is_alphanumeric, is_digit};
 
 
 pub fn parse(s: &str) -> IResult<&str, Vec<Box<Message>>> {
@@ -20,6 +22,34 @@ pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
     let (s, _) = space0.parse(s)?;
 
     Ok((s, Box::new(Message {})))
+}
+
+struct MessageField;
+
+pub fn parse_field(s: &str) -> IResult<&str, MessageField> {
+
+    let (s, _) = space0.parse(s)?;
+    let (s, v1) = alt((tag("optional"), tag("repeated"))).parse(s)?;
+    let (s, _) = space1.parse(s)?;
+    let (s, v1) = alt((
+        tag("string"),
+        tag("uint64"),
+        tag("uint32"),
+        tag("int64"),
+        tag("int32"),
+        tag("bool"),
+        tag("bytes")
+    )).parse(s)?;
+    let (s, _) = space1.parse(s)?;
+    let (s, ident) = take_while1(is_alphanumeric).parse(s)?;
+    let (s, _) = space0.parse(s)?;
+    let (s, _) = tag("=").parse(s)?;
+    let (s, _) = space0.parse(s)?;
+    let (s, version) = take_while1(is_digit).parse(s)?;
+    let (s, _) = space0.parse(s)?;
+    let (s, _) = tag(";").parse(s)?;
+
+    Ok((s, MessageField {}))
 }
 
 
