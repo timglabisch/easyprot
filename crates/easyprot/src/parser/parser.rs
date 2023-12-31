@@ -6,16 +6,31 @@ use nom::character::{is_alphanumeric, is_digit};
 use nom::multi::many0;
 
 
-pub fn parse(s: &str) -> IResult<&str, Vec<Box<Message>>> {
-    ::nom::multi::many1(parse_message).parse(s)
+pub fn parse(s: &str) -> IResult<&str, ProtoAst> {
+
+    let (s, items) = ::nom::multi::many0(parse_message).parse(s)?;
+
+    Ok((s, ProtoAst {
+        syntax: None,
+        items
+    }))
 }
 
-struct Message {
+struct ProtoAst {
+    syntax: Option<String>,
+    items: Vec<Box<ItemMessage>>,
+}
+
+enum Item {
+    ItemMessage(ItemMessage),
+}
+
+struct ItemMessage {
     lines: Vec<EnumLine>
 }
 
 
-pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
+pub fn parse_message(s: &str) -> IResult<&str, Box<ItemMessage>> {
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag("Message").parse(s)?;
     let (s, _) = space0.parse(s)?;
@@ -26,7 +41,7 @@ pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = space0.parse(s)?;
 
-    Ok((s, Box::new(Message {
+    Ok((s, Box::new(ItemMessage {
         lines
     })))
 }
@@ -108,13 +123,13 @@ pub fn parse_field_comment_dockblock(s: &str) -> IResult<&str, FieldComment> {
 #[test]
 fn parse_empty() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse("Message{}Message{}")?;
-    assert_eq!(b.len(), 2);
+    assert_eq!(b.items.len(), 2);
     Ok(())
 }
 
 #[test]
 fn parse_whitespace() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse("Message { } Message { } ")?;
-    assert_eq!(b.len(), 2);
+    assert_eq!(b.items.len(), 2);
     Ok(())
 }
