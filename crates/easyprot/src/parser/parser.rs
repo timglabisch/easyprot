@@ -1,15 +1,18 @@
-use nom::bytes::complete::{tag, take_while1};
+use nom::bytes::complete::{tag, take_until, take_while1};
 use nom::{complete, IResult, Parser};
 use nom::branch::alt;
 use nom::character::complete::{space0, space1};
 use nom::character::{is_alphanumeric, is_digit};
+use nom::multi::many0;
 
 
 pub fn parse(s: &str) -> IResult<&str, Vec<Box<Message>>> {
     ::nom::multi::many1(parse_message).parse(s)
 }
 
-struct Message {}
+struct Message {
+    lines: Vec<EnumLine>
+}
 
 
 pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
@@ -18,42 +21,44 @@ pub fn parse_message(s: &str) -> IResult<&str, Box<Message>> {
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag("{").parse(s)?;
     let (s, _) = space0.parse(s)?;
-    let (s, _) = parse_field.parse(s)?;
+    let (s, lines) = many0(parse_field).parse(s)?;
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = space0.parse(s)?;
 
-    Ok((s, Box::new(Message {})))
+    Ok((s, Box::new(Message {
+        lines
+    })))
 }
 
 enum EnumLine {
     EnumLineField(EnumLineField),
-    EnumLineComment(EnumLineComment),
 }
 
 struct EnumLineField {}
-struct EnumLineComment {}
 
 pub fn parse_line(s: &str) -> IResult<&str, EnumLine> {
     let (s, _) = space0.parse(s)?;
-    let (s, v1) = alt((parse_field, tag("repeated"))).parse(s)?;
+    let (s, v1) = parse_field.parse(s)?;
     let (s, _) = space0.parse(s)?;
-    Ok((s, EnumLine {}))
+    Ok((s, EnumLine::EnumLineField(EnumLineField {
+
+    })))
 }
 
 struct MessageField;
 
-pub fn parse_comment(s: &str) -> IResult<&str, EnumLine> {
-    Ok((s, EnumLine::EnumLineComment(EnumLineComment {
-        
-    })))
-}
 
 pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
+
+    let (s, comments1) = parse_field_comments_dockblock.parse(s)?;
 
     let (s, _) = space0.parse(s)?;
     let (s, v1) = alt((tag("optional"), tag("repeated"))).parse(s)?;
     let (s, _) = space1.parse(s)?;
+
+    let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
+
     let (s, v1) = alt((
         tag("string"),
         tag("uint64"),
@@ -63,16 +68,40 @@ pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
         tag("bool"),
         tag("bytes")
     )).parse(s)?;
+
     let (s, _) = space1.parse(s)?;
-    let (s, ident) = take_while1(is_alphanumeric).parse(s)?;
+    let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
+    let (s, ident) = take_while1(|x| is_alphanumeric(x as u8)).parse(s)?;
+    let (s, comments3) = parse_field_comments_dockblock.parse(s)?;
     let (s, _) = space0.parse(s)?;
     let (s, _) = tag("=").parse(s)?;
     let (s, _) = space0.parse(s)?;
-    let (s, version) = take_while1(is_digit).parse(s)?;
+    let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
+    let (s, version) = take_while1(|x| is_digit(x as u8)).parse(s)?;
     let (s, _) = space0.parse(s)?;
+    let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
     let (s, _) = tag(";").parse(s)?;
+    let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
 
     Ok((s, EnumLine::EnumLineField(EnumLineField {})))
+}
+
+struct FieldComment {
+    comment: String,
+}
+
+pub fn parse_field_comments_dockblock(s: &str) -> IResult<&str, Vec<FieldComment>> {
+    let (s, buf) = many0(parse_field_comment_dockblock).parse(s)?;
+    Ok((s, buf))
+}
+
+pub fn parse_field_comment_dockblock(s: &str) -> IResult<&str, FieldComment> {
+    let (s, buf) = tag("/**").parse(s)?;
+    let (s, comment) = take_until("*/").parse(s)?;
+
+    Ok((s, FieldComment {
+        comment: comment.trim().to_string()
+    }))
 }
 
 
