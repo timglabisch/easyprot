@@ -69,23 +69,36 @@ enum EnumLine {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct EnumLineField {}
+struct EnumLineField {
+    modifier: MessageFieldModifierCount,
+    field_type: MessageFieldType,
+    ident: String,
+}
 
 pub fn parse_line(s: &str) -> IResult<&str, EnumLine> {
     let (s, _) = multispace0.parse(s)?;
-    let (s, v1) = parse_field.parse(s)?;
+    let (s, v) = parse_field.parse(s)?;
     let (s, _) = multispace0.parse(s)?;
-    Ok((s, EnumLine::EnumLineField(EnumLineField {
-
-    })))
+    Ok((s, v))
 }
 
 struct MessageField;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialOrd, PartialEq)]
 enum MessageFieldModifierCount {
     OPTIONAL,
     REPEATED,
+}
+
+#[derive(Clone, Debug, Eq, PartialOrd, PartialEq)]
+enum MessageFieldType {
+    STRING,
+    UINT64,
+    UINT32,
+    INT64,
+    INT32,
+    BOOL,
+    BYTES,
 }
 
 pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
@@ -101,14 +114,14 @@ pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
 
     let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
 
-    let (s, v1) = alt((
-        tag("string"),
-        tag("uint64"),
-        tag("uint32"),
-        tag("int64"),
-        tag("int32"),
-        tag("bool"),
-        tag("bytes")
+    let (s, field_type) = alt((
+        value(MessageFieldType::STRING, tag("string")),
+        value(MessageFieldType::UINT64, tag("uint64")),
+        value(MessageFieldType::UINT32, tag("uint32")),
+        value(MessageFieldType::INT64, tag("int64")),
+        value(MessageFieldType::INT32, tag("int32")),
+        value(MessageFieldType::BOOL, tag("bool")),
+        value(MessageFieldType::BYTES, tag("bytes")),
     )).parse(s)?;
 
     let (s, _) = space1.parse(s)?;
@@ -126,7 +139,9 @@ pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
     let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
 
     Ok((s, EnumLine::EnumLineField(EnumLineField {
-
+        modifier,
+        field_type,
+        ident: ident.to_string(),
     })))
 }
 
@@ -186,14 +201,22 @@ fn test_parse_fields() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse(r#"
     Message {
         optional string foo = 1;
-        repeated string foo2 = 2;
+        repeated uint64 foo2 = 2;
     }
     "#)?;
 
     assert_eq!(b.items.len(), 1);
     assert_eq!(b.items[0].lines.len(), 2);
     assert_eq!(b.items[0].lines[0], EnumLine::EnumLineField(EnumLineField {
+        modifier: MessageFieldModifierCount::OPTIONAL,
+        field_type: MessageFieldType::STRING,
+        ident: "foo".to_string(),
+    }));
 
+    assert_eq!(b.items[0].lines[1], EnumLine::EnumLineField(EnumLineField {
+        modifier: MessageFieldModifierCount::REPEATED,
+        field_type: MessageFieldType::UINT64,
+        ident: "foo2".to_string(),
     }));
 
     Ok(())
