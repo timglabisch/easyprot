@@ -3,7 +3,7 @@ use nom::{complete, IResult, Parser};
 use nom::branch::alt;
 use nom::character::complete::{multispace0, space0, space1};
 use nom::character::{is_alphanumeric, is_digit};
-use nom::combinator::opt;
+use nom::combinator::{opt, value};
 use nom::multi::many0;
 use crate::parser::string::parse_string;
 
@@ -82,6 +82,7 @@ pub fn parse_line(s: &str) -> IResult<&str, EnumLine> {
 
 struct MessageField;
 
+#[derive(Clone)]
 enum MessageFieldModifierCount {
     OPTIONAL,
     REPEATED,
@@ -92,7 +93,10 @@ pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
     let (s, comments1) = parse_field_comments_dockblock.parse(s)?;
 
     let (s, _) = multispace0.parse(s)?;
-    let (s, modifier) = alt((tag("optional"), tag("repeated"))).parse(s)?;
+    let (s, modifier) = alt((
+        value(MessageFieldModifierCount::OPTIONAL, tag("optional")),
+        value(MessageFieldModifierCount::REPEATED, tag("repeated")),
+    )).parse(s)?;
     let (s, _) = space1.parse(s)?;
 
     let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
@@ -122,7 +126,7 @@ pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
     let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
 
     Ok((s, EnumLine::EnumLineField(EnumLineField {
-   
+
     })))
 }
 
