@@ -1,4 +1,4 @@
-use nom::bytes::complete::{tag, take_until, take_while1};
+use nom::bytes::complete::{tag, tag_no_case, take_until, take_while1};
 use nom::{complete, IResult, Parser};
 use nom::branch::alt;
 use nom::character::complete::{multispace0, multispace1, space0, space1};
@@ -52,7 +52,7 @@ struct ItemEnum {
 }
 
 pub fn parse_syntax(s: &str) -> IResult<&str, String> {
-    let (s, _) = tag("syntax").parse(s)?;
+    let (s, _) = tag_no_case("syntax").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("=").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
@@ -71,7 +71,7 @@ enum Item {
 
 pub fn parse_enum(s: &str ) -> IResult<&str, ItemEnum> {
     let (s, _) = multispace0.parse(s)?;
-    let (s, _) = tag("Enum").parse(s)?;
+    let (s, _) = tag_no_case("Enum").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, ident) = take_while1(|v| is_alphanumeric(v as u8)).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
@@ -90,7 +90,7 @@ pub fn parse_enum(s: &str ) -> IResult<&str, ItemEnum> {
 
 pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
     let (s, _) = multispace0.parse(s)?;
-    let (s, _) = tag("Message").parse(s)?;
+    let (s, _) = tag_no_case("Message").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, ident) = take_while1(|v| is_alphanumeric(v as u8)).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
@@ -166,21 +166,21 @@ pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
 
     let (s, _) = multispace0.parse(s)?;
     let (s, modifier) = alt((
-        value(MessageFieldModifierCount::OPTIONAL, tag("optional")),
-        value(MessageFieldModifierCount::REPEATED, tag("repeated")),
+        value(MessageFieldModifierCount::OPTIONAL, tag_no_case("optional")),
+        value(MessageFieldModifierCount::REPEATED, tag_no_case("repeated")),
     )).parse(s)?;
     let (s, _) = space1.parse(s)?;
 
     let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
 
     let (s, field_type) = alt((
-        value(MessageFieldType::STRING, tag("string")),
-        value(MessageFieldType::UINT64, tag("uint64")),
-        value(MessageFieldType::UINT32, tag("uint32")),
-        value(MessageFieldType::INT64, tag("int64")),
-        value(MessageFieldType::INT32, tag("int32")),
-        value(MessageFieldType::BOOL, tag("bool")),
-        value(MessageFieldType::BYTES, tag("bytes")),
+        value(MessageFieldType::STRING, tag_no_case("string")),
+        value(MessageFieldType::UINT64, tag_no_case("uint64")),
+        value(MessageFieldType::UINT32, tag_no_case("uint32")),
+        value(MessageFieldType::INT64, tag_no_case("int64")),
+        value(MessageFieldType::INT32, tag_no_case("int32")),
+        value(MessageFieldType::BOOL, tag_no_case("bool")),
+        value(MessageFieldType::BYTES, tag_no_case("bytes")),
     )).parse(s)?;
 
     let (s, _) = multispace1.parse(s)?;
@@ -238,6 +238,13 @@ fn test_parse_empty() -> Result<(), ::anyhow::Error> {
 fn test_parse_whitespace() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse("Message A { } Message B { } ")?;
     assert_eq!(b.items.len(), 2);
+    Ok(())
+}
+
+#[test]
+fn test_parse_enum() -> Result<(), ::anyhow::Error> {
+    let (a, b) = parse("enum A { } ")?;
+    assert_eq!(b.items.len(), 1);
     Ok(())
 }
 
