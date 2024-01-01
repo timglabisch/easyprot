@@ -66,13 +66,19 @@ enum Item {
     Enum(ItemEnum)
 }
 
+pub fn parse_enum(s: &str ) -> IResult<&str, ItemEnum> {
+    unimplemented!("fooo")
+}
+
 pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("Message").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
+    let (s, ident) = take_while1(|v| is_alphanumeric(v as u8)).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("{").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
-    let (s, fields) = many0(parse_field).parse(s)?;
+    let (s, fields) = many0(parse_message_field).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
@@ -115,7 +121,7 @@ enum MessageFieldType {
     BYTES,
 }
 
-pub fn parse_field(s: &str) -> IResult<&str, ItemMessageField> {
+pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
 
     let (s, comments1) = parse_field_comments_dockblock.parse(s)?;
 
@@ -184,14 +190,14 @@ pub fn parse_field_comment_dockblock(s: &str) -> IResult<&str, FieldComment> {
 
 #[test]
 fn test_parse_empty() -> Result<(), ::anyhow::Error> {
-    let (a, b) = parse("Message{}Message{}")?;
+    let (a, b) = parse("Message A {}Message B{}")?;
     assert_eq!(b.items.len(), 2);
     Ok(())
 }
 
 #[test]
 fn test_parse_whitespace() -> Result<(), ::anyhow::Error> {
-    let (a, b) = parse("Message { } Message { } ")?;
+    let (a, b) = parse("Message A { } Message B { } ")?;
     assert_eq!(b.items.len(), 2);
     Ok(())
 }
@@ -200,6 +206,7 @@ fn test_parse_whitespace() -> Result<(), ::anyhow::Error> {
 fn test_parse_multiline() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse(r#"
     Message
+    Foo
     {
     }
     "#)?;
@@ -209,7 +216,7 @@ fn test_parse_multiline() -> Result<(), ::anyhow::Error> {
 
 #[test]
 fn test_parse_syntax() -> Result<(), ::anyhow::Error> {
-    let (a, b) = parse(r#"syntax = "proto3"; Message { } "#)?;
+    let (a, b) = parse(r#"syntax = "proto3"; Message X { } "#)?;
     assert_eq!(b.syntax, Some("proto3".to_string()));
     Ok(())
 }
@@ -217,7 +224,7 @@ fn test_parse_syntax() -> Result<(), ::anyhow::Error> {
 #[test]
 fn test_parse_fields() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse(r#"
-    Message {
+    Message MsgName {
         optional string foo = 1;
         repeated uint64 foo2 = 2;
     }
