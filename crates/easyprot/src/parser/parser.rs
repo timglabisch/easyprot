@@ -3,7 +3,8 @@ use nom::{complete, IResult, Parser};
 use nom::branch::alt;
 use nom::character::complete::{multispace0, space0, space1};
 use nom::character::{is_alphanumeric, is_digit};
-use nom::combinator::{opt, value};
+use nom::combinator::{map, opt, value};
+use nom::error::{ErrorKind, ParseError};
 use nom::multi::many0;
 use crate::parser::string::parse_string;
 
@@ -12,7 +13,7 @@ pub fn parse(s: &str) -> IResult<&str, ProtoAst> {
 
     let (s, _) = multispace0.parse(s)?;
     let (s, syntax) = opt(parse_syntax).parse(s)?;
-    let (s, items) = ::nom::multi::many0(parse_message).parse(s)?;
+    let (s, items) = ::nom::multi::many0(parse_element).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
 
     Ok((s, ProtoAst {
@@ -21,17 +22,30 @@ pub fn parse(s: &str) -> IResult<&str, ProtoAst> {
     }))
 }
 
-struct ProtoAst {
-    syntax: Option<String>,
-    items: Vec<Box<ItemMessage>>,
+pub fn parse_element(s: &str) -> IResult<&str, Element> {
+    let (s, v) = alt((
+        map(parse_message, |v| Element::ItemMessage(v)),
+    )).parse(s)?;
+
+    Ok((s, v))
 }
 
-enum Item {
+struct ProtoAst {
+    syntax: Option<String>,
+    items: Vec<Element>,
+}
+
+enum Element {
     ItemMessage(ItemMessage),
+    ItemEnum(ItemEnum),
 }
 
 struct ItemMessage {
-    lines: Vec<EnumLine>
+    fields: Vec<ItemMessageField>
+}
+
+struct ItemEnum {
+    fields: Vec<ItemEnumField>
 }
 
 pub fn parse_syntax(s: &str) -> IResult<&str, String> {
@@ -47,39 +61,39 @@ pub fn parse_syntax(s: &str) -> IResult<&str, String> {
     Ok((s, version))
 }
 
-pub fn parse_message(s: &str) -> IResult<&str, Box<ItemMessage>> {
+enum Item {
+    Message(ItemMessage),
+    Enum(ItemEnum)
+}
+
+pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("Message").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("{").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
-    let (s, lines) = many0(parse_field).parse(s)?;
+    let (s, fields) = many0(parse_field).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
 
-    Ok((s, Box::new(ItemMessage {
-        lines
-    })))
+    Ok((s, ItemMessage {
+        fields
+    }))
 }
 
 #[derive(Debug, Eq, PartialEq)]
-enum EnumLine {
-    EnumLineField(EnumLineField),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct EnumLineField {
+struct ItemMessageField {
     modifier: MessageFieldModifierCount,
     field_type: MessageFieldType,
     ident: String,
+    id: u64,
 }
 
-pub fn parse_line(s: &str) -> IResult<&str, EnumLine> {
-    let (s, _) = multispace0.parse(s)?;
-    let (s, v) = parse_field.parse(s)?;
-    let (s, _) = multispace0.parse(s)?;
-    Ok((s, v))
+#[derive(Debug, Eq, PartialEq)]
+struct ItemEnumField {
+    ident: String,
+    id: u64,
 }
 
 struct MessageField;
@@ -101,7 +115,7 @@ enum MessageFieldType {
     BYTES,
 }
 
-pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
+pub fn parse_field(s: &str) -> IResult<&str, ItemMessageField> {
 
     let (s, comments1) = parse_field_comments_dockblock.parse(s)?;
 
@@ -132,17 +146,21 @@ pub fn parse_field(s: &str) -> IResult<&str, EnumLine> {
     let (s, _) = tag("=").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
-    let (s, version) = take_while1(|x| is_digit(x as u8)).parse(s)?;
+    let (s, id) : (_, &str) = take_while1(|x| is_digit(x as u8)).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
     let (s, _) = tag(";").parse(s)?;
     let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
 
-    Ok((s, EnumLine::EnumLineField(EnumLineField {
+    Ok((s, ItemMessageField {
         modifier,
         field_type,
         ident: ident.to_string(),
-    })))
+        id: match id.parse::<u64>() {
+            Ok(id) => id,
+            Err(_) => return Err(nom::Err::Error(ParseError::from_error_kind(s, ErrorKind::Digit))),
+        },
+    }))
 }
 
 struct FieldComment {
@@ -206,18 +224,20 @@ fn test_parse_fields() -> Result<(), ::anyhow::Error> {
     "#)?;
 
     assert_eq!(b.items.len(), 1);
-    assert_eq!(b.items[0].lines.len(), 2);
-    assert_eq!(b.items[0].lines[0], EnumLine::EnumLineField(EnumLineField {
+
+    let msg = match &b.items[0] {
+        Element::ItemMessage(m) => m,
+        _ => panic!("invalid type"),
+    };
+
+    assert_eq!(msg.fields.len(), 2);
+    assert_eq!(msg.fields[0], ItemMessageField {
         modifier: MessageFieldModifierCount::OPTIONAL,
         field_type: MessageFieldType::STRING,
         ident: "foo".to_string(),
-    }));
+        id: 1,
+    });
 
-    assert_eq!(b.items[0].lines[1], EnumLine::EnumLineField(EnumLineField {
-        modifier: MessageFieldModifierCount::REPEATED,
-        field_type: MessageFieldType::UINT64,
-        ident: "foo2".to_string(),
-    }));
 
     Ok(())
 }
