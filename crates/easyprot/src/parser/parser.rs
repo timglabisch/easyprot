@@ -1,7 +1,7 @@
 use nom::bytes::complete::{tag, take_until, take_while1};
 use nom::{complete, IResult, Parser};
 use nom::branch::alt;
-use nom::character::complete::{multispace0, space0, space1};
+use nom::character::complete::{multispace0, multispace1, space0, space1};
 use nom::character::{is_alphanumeric, is_digit};
 use nom::combinator::{map, opt, value};
 use nom::error::{ErrorKind, ParseError};
@@ -25,6 +25,7 @@ pub fn parse(s: &str) -> IResult<&str, ProtoAst> {
 pub fn parse_element(s: &str) -> IResult<&str, Element> {
     let (s, v) = alt((
         map(parse_message, |v| Element::ItemMessage(v)),
+        map(parse_enum, |v| Element::ItemEnum(v)),
     )).parse(s)?;
 
     Ok((s, v))
@@ -140,7 +141,23 @@ enum MessageFieldType {
 }
 
 pub fn parse_enum_field(s: &str) -> IResult<&str, ItemEnumField> {
-    unimplemented!("xxx")
+    let (s, _) = multispace0.parse(s)?;
+    let (s, ident) = take_while1(|x| is_alphanumeric(x as u8)).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag("=").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, id) : (_, &str) = take_while1(|x| is_digit(x as u8)).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag(";").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+
+    Ok((s, ItemEnumField {
+        ident: ident.to_string(),
+        id: match id.parse::<u64>() {
+            Ok(id) => id,
+            Err(_) => return Err(nom::Err::Error(ParseError::from_error_kind(s, ErrorKind::Digit))),
+        },
+    }))
 }
 
 pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
@@ -166,7 +183,7 @@ pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
         value(MessageFieldType::BYTES, tag("bytes")),
     )).parse(s)?;
 
-    let (s, _) = space1.parse(s)?;
+    let (s, _) = multispace1.parse(s)?;
     let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
     let (s, ident) = take_while1(|x| is_alphanumeric(x as u8)).parse(s)?;
     let (s, comments3) = parse_field_comments_dockblock.parse(s)?;
