@@ -41,10 +41,12 @@ enum Element {
 }
 
 struct ItemMessage {
+    ident: String,
     fields: Vec<ItemMessageField>
 }
 
 struct ItemEnum {
+    ident: String,
     fields: Vec<ItemEnumField>
 }
 
@@ -67,7 +69,22 @@ enum Item {
 }
 
 pub fn parse_enum(s: &str ) -> IResult<&str, ItemEnum> {
-    unimplemented!("fooo")
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag("Enum").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, ident) = take_while1(|v| is_alphanumeric(v as u8)).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag("{").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, fields) = many0(parse_enum_field).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag("}").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+
+    Ok((s, ItemEnum {
+        ident: ident.to_string(),
+        fields
+    }))
 }
 
 pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
@@ -84,6 +101,7 @@ pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
     let (s, _) = multispace0.parse(s)?;
 
     Ok((s, ItemMessage {
+        ident: ident.to_string(),
         fields
     }))
 }
@@ -119,6 +137,10 @@ enum MessageFieldType {
     INT32,
     BOOL,
     BYTES,
+}
+
+pub fn parse_enum_field(s: &str) -> IResult<&str, ItemEnumField> {
+    unimplemented!("xxx")
 }
 
 pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
