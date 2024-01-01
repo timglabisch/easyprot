@@ -1,10 +1,10 @@
 use nom::{IResult, Parser};
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag, take_until};
-use nom::character::complete::{char, none_of};
+use nom::character::complete::{anychar, char, none_of};
 use nom::combinator::{map, not, value, verify};
 use crate::parser::parser::{parse, parse_message};
-use nom::multi::{fold_many0, many0};
+use nom::multi::{fold_many0, many0, many_till};
 use nom::sequence::{delimited, preceded};
 
 
@@ -20,7 +20,8 @@ fn parse_escaped_char(input: &str) -> IResult<&str, String> {
     Ok((s, char.to_string()))
 }
 
-fn parse_literal(input: &str) -> IResult<&str, String> {
+fn parse_literal(s: &str) -> IResult<&str, String> {
+
     // `is_not` parses a string of 0 or more characters that aren't one of the
     // given characters.
     let not_quote_slash = is_not("\"\\");
@@ -29,7 +30,7 @@ fn parse_literal(input: &str) -> IResult<&str, String> {
     // the parser. The verification function accepts out output only if it
     // returns true. In this case, we want to ensure that the output of is_not
     // is non-empty.
-    let (s, v) = verify(not_quote_slash, |s: &str| !s.is_empty())(input)?;
+    let (s, v) = verify(not_quote_slash, |s: &str| !s.is_empty())(s)?;
 
     Ok((s, v.to_string()))
 }
@@ -76,6 +77,6 @@ pub fn parse_string(s: &str) -> IResult<&str, String> {
 fn test_parse_string() -> Result<(), ::anyhow::Error> {
     assert_eq!(parse_string(r#""foo foo""#)?.1, r#"foo foo"#);
     assert_eq!(parse_string(r#""foo\"foo""#)?.1, r#"foo\"foo"#);
-    
+
     Ok(())
 }
