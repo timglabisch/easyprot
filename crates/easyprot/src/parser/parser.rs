@@ -243,7 +243,7 @@ fn test_parse_whitespace() -> Result<(), ::anyhow::Error> {
 
 #[test]
 fn test_parse_enum() -> Result<(), ::anyhow::Error> {
-    let (a, b) = parse("enum A { } ")?;
+    let (a, b) = parse("enum A { FOO = 2; BAR = 3; } ")?;
     assert_eq!(b.items.len(), 1);
     Ok(())
 }
