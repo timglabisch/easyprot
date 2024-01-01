@@ -268,6 +268,22 @@ fn test_parse_syntax() -> Result<(), ::anyhow::Error> {
 }
 
 #[test]
+fn test_parse_oneof() -> Result<(), ::anyhow::Error> {
+    let (a, b) = parse(r#"
+    Message MsgName {
+         oneof test_oneof {
+            string name = 4;
+            SubMessage sub_message = 9;
+         }
+    }
+    "#)?;
+
+    assert_eq!(b.items.len(), 1);
+
+    Ok(())
+}
+
+#[test]
 fn test_parse_fields() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse(r#"
     Message MsgName {
