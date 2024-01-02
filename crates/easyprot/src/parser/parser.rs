@@ -184,7 +184,7 @@ pub fn parse_message_field_standard(s: &str) -> IResult<&str, ItemMessageField> 
         value(MessageFieldModifierCount::OPTIONAL, tag_no_case("optional")),
         value(MessageFieldModifierCount::REPEATED, tag_no_case("repeated")),
     ))).parse(s)?;
-    let (s, _) = space1.parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
 
     let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
 
@@ -307,7 +307,7 @@ fn test_parse_oneof() -> Result<(), ::anyhow::Error> {
     Message MsgName {
          oneof testoneof {
             string name = 4;
-            string sub_message = 9;
+            string submessage = 9;
          }
     }
     "#)?;
