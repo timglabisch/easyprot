@@ -96,7 +96,10 @@ pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("{").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
-    let (s, fields) = many0(parse_message_field).parse(s)?;
+    let (s, fields) = many0(alt((
+        parse_message_field_standard,
+        parse_message_field_oneof,
+    ))).parse(s)?;
     let (s, _) = multispace0.parse(s)?;
     let (s, _) = tag("}").parse(s)?;
     let (s, _) = multispace0.parse(s)?;
@@ -107,12 +110,24 @@ pub fn parse_message(s: &str) -> IResult<&str, ItemMessage> {
     }))
 }
 
-#[derive(Debug, Eq, PartialEq)]
-struct ItemMessageField {
-    modifier: MessageFieldModifierCount,
+#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
+enum ItemMessageField {
+    STANDARD(ItemMessageFieldStandard),
+    ONEOF(ItemMessageFieldOneOf)
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
+struct ItemMessageFieldStandard {
+    modifier: Option<MessageFieldModifierCount>,
     field_type: MessageFieldType,
     ident: String,
     id: u64,
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
+struct ItemMessageFieldOneOf {
+    fields: Vec<ItemMessageField>,
+    ident: String,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -160,15 +175,15 @@ pub fn parse_enum_field(s: &str) -> IResult<&str, ItemEnumField> {
     }))
 }
 
-pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
+pub fn parse_message_field_standard(s: &str) -> IResult<&str, ItemMessageField> {
 
     let (s, comments1) = parse_field_comments_dockblock.parse(s)?;
 
     let (s, _) = multispace0.parse(s)?;
-    let (s, modifier) = alt((
+    let (s, modifier) = opt(alt((
         value(MessageFieldModifierCount::OPTIONAL, tag_no_case("optional")),
         value(MessageFieldModifierCount::REPEATED, tag_no_case("repeated")),
-    )).parse(s)?;
+    ))).parse(s)?;
     let (s, _) = space1.parse(s)?;
 
     let (s, comments2) = parse_field_comments_dockblock.parse(s)?;
@@ -197,7 +212,7 @@ pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
     let (s, _) = tag(";").parse(s)?;
     let (s, comments4) = parse_field_comments_dockblock.parse(s)?;
 
-    Ok((s, ItemMessageField {
+    Ok((s, ItemMessageField::STANDARD(ItemMessageFieldStandard {
         modifier,
         field_type,
         ident: ident.to_string(),
@@ -205,11 +220,30 @@ pub fn parse_message_field(s: &str) -> IResult<&str, ItemMessageField> {
             Ok(id) => id,
             Err(_) => return Err(nom::Err::Error(ParseError::from_error_kind(s, ErrorKind::Digit))),
         },
-    }))
+    })))
 }
 
 struct FieldComment {
     comment: String,
+}
+
+pub fn parse_message_field_oneof(s: &str) -> IResult<&str, ItemMessageField> {
+    let (s, _) = multispace0.parse(s)?;
+    let (s, buf) = tag("oneof").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, ident) = take_while1(|x| is_alphanumeric(x as u8)).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag("{").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, fields) = many0(parse_message_field_standard).parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+    let (s, _) = tag("}").parse(s)?;
+    let (s, _) = multispace0.parse(s)?;
+
+    Ok((s, ItemMessageField::ONEOF(ItemMessageFieldOneOf {
+        ident: ident.to_string(),
+        fields
+    })))
 }
 
 pub fn parse_field_comments_dockblock(s: &str) -> IResult<&str, Vec<FieldComment>> {
@@ -271,9 +305,9 @@ fn test_parse_syntax() -> Result<(), ::anyhow::Error> {
 fn test_parse_oneof() -> Result<(), ::anyhow::Error> {
     let (a, b) = parse(r#"
     Message MsgName {
-         oneof test_oneof {
+         oneof testoneof {
             string name = 4;
-            SubMessage sub_message = 9;
+            string sub_message = 9;
          }
     }
     "#)?;
@@ -300,12 +334,12 @@ fn test_parse_fields() -> Result<(), ::anyhow::Error> {
     };
 
     assert_eq!(msg.fields.len(), 2);
-    assert_eq!(msg.fields[0], ItemMessageField {
-        modifier: MessageFieldModifierCount::OPTIONAL,
+    assert_eq!(msg.fields[0], ItemMessageField::STANDARD(ItemMessageFieldStandard {
+        modifier: Some(MessageFieldModifierCount::OPTIONAL),
         field_type: MessageFieldType::STRING,
         ident: "foo".to_string(),
         id: 1,
-    });
+    }));
 
 
     Ok(())
